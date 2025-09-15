@@ -1,5 +1,19 @@
+# macOS
 .DS_Store
+.AppleDouble
+.LSOverride
+
+# Node/JS（将来入れるかも）
 node_modules/
 dist/
-build/
+coverage/
+
+# Editors
+*.swp
+*.swo
 *.log
+.vscode/
+.idea/
+
+# Env / local
+.env
