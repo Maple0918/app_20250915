@@ -17,7 +17,8 @@
   <!-- ヘッダー：アプリ名／ログインユーザ／設定 -->
   <header class="c-app-header" role="banner">
     <div class="c-app-header_left">
-      <h1 class="c-app-title js-route" data-view="home">2人用支出管理</h1>
+      <!-- <h1 class="c-app-title js-route" data-view="home">2人用支出管理</h1> -->
+      <img src="/LOGO.png" alt="ロゴ" class="c-app-logo js-route" data-view="home">
     </div>
     <div class="c-app-header_right">
       <button class="c-button c-icon-button js-route" data-view="settings" aria-controls="view-settings" title="設定">⚙️</button>
@@ -39,6 +40,19 @@
   </nav>
 
   <main class="c-main" role="main">
+
+<!-- ローディング -->
+<section data-view="loading" class="c-view js-view" role="status" aria-live="polite" aria-busy="true">
+  <div class="spinner" aria-hidden="true"></div>
+  <p>初期化中です…</p>
+</section>
+
+<!-- エラー -->
+<section data-view="boot-error" class="c-view js-view" hidden>
+  <h2>読み込みに失敗しました</h2>
+  <button class="js-retry-boot">再試行</button>
+  <pre class="js-boot-error-log" style="white-space:pre-wrap"></pre>
+</section>
 
     <!-- 1) ホーム -->
     <section
@@ -73,7 +87,7 @@
               </tr>
             </thead>
             <tbody class="c-expense-table__body js-expense-list">
-              <!-- JSが行を最大10件まで挿入 -->
+              <!-- JSが挿入 -->
             </tbody>
           </table>
           <div class="c-notice is-loading js-expense-loading" hidden>読み込み中...</div>

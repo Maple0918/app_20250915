@@ -40,6 +40,12 @@
   align-items: center;               /* 縦中央揃え */
 }
 
+.c-app-logo {
+  width: 180px;   /* 好きなサイズに調整 */
+  height: auto;  /* アスペクト比を維持 */
+  cursor: pointer; /* クリック可能感を出す */
+}
+
 /* ヘッダー右側エリア */
 .c-app-header_right {
   display: flex;                     /* 内部要素も横並び */

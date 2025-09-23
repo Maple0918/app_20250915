@@ -1,25 +1,26 @@
 // ========================
-// アプリケーションのメインエントリーポイント（起動処理）
+// アプリのエントリポイント
 // core/main.js
-// 目的：アプリの初期化とコントローラーの起動を管理する
-// 役割：各機能モジュールを読み込み、適切な順序で初期化を実行する
 // ========================
 
-import { initCommon } from "./controller.js";     // 共通機能の初期化関数
+import { start as bootStart } from "./boot.js";
 
-// DOMが完全に読み込まれた後にアプリを起動
+// 起動
 window.addEventListener("load", () => {
-    
-  // 1. 共通機能を最初に初期化
-  initCommon();
-  
-  // 2. デバッグモードの切替イベント
-  const debugToggle = document.querySelector('.js-debug-toggle');
-  const mainNav = document.getElementById('main-nav');
+  // 起動フロー（ロード → 初期化 → ホーム表示）
+  bootStart();
 
+  // デバッグ：メインナビの表示/非表示切替（従来の挙動を維持）
+  const debugToggle = document.querySelector(".js-debug-toggle");
+  const mainNav = document.getElementById("main-nav");
   if (debugToggle && mainNav) {
-    debugToggle.addEventListener('change', () => {
-      mainNav.classList.toggle('u-hidden', !debugToggle.checked);
+    debugToggle.addEventListener("change", () => {
+      mainNav.classList.toggle("u-hidden", !debugToggle.checked);
     });
   }
+
+  // デバッグ再ブート（ユーザ切替などからの要求を受ける）
+  document.addEventListener("app:debug-reboot", () => {
+    bootStart();
+  });
 });

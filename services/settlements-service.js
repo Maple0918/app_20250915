@@ -1,30 +1,40 @@
-// ========================
-// 清算ビジネスロジック（お金の精算処理）
-// services/settlements-service.js
-// 役割：2人間のお金の貸し借りを整理する清算機能を管理
-// 機能：
-// - 現在の差額計算：誰がいくら多く支払っているかを算出
-// - 清算申請：差額の精算を申請
-// - 清算承認：申請された精算を承認して実際に精算
-// - 清算拒否：申請された精算を却下
-// ========================
+import { api } from "./api-client.js";
 
-export async function listAllSettlements() {
-  console.log("[Service] listAllSettlements");
-  return Promise.resolve([]);
+/**
+ * 清算一覧（ページング）
+ * 返り値はバックエンドの仕様に従います（例: { items, nextCursor }）
+ */
+export async function listSettlements({ limit = 50, cursor } = {}) {
+  const q = new URLSearchParams();
+  if (limit) q.set("limit", String(limit));
+  if (cursor) q.set("cursor", cursor);
+  return api.get(`/settlements?${q.toString()}`);
 }
 
-export async function requestSettlement(user) {
-  console.log("[Service] requestSettlement by", user);
-  return Promise.resolve();
+/**
+ * 清算申請
+ * applicant はサーバ側で認証情報から決定してもOK
+ */
+export async function requestSettlement(applicant) {
+  return api.post(
+    `/settlements/request`,
+    { applicant },
+    { idempotencyKey: `st-req-${Date.now()}` }
+  );
 }
 
+/**
+ * 清算承認
+ */
 export async function approveSettlement(id) {
-  console.log("[Service] approveSettlement", id);
-  return Promise.resolve();
+  if (!id) throw new Error("id が未指定です");
+  return api.post(`/settlements/${encodeURIComponent(id)}/approve`, {});
 }
 
+/**
+ * 清算却下
+ */
 export async function rejectSettlement(id) {
-  console.log("[Service] rejectSettlement", id);
-  return Promise.resolve();
+  if (!id) throw new Error("id が未指定です");
+  return api.post(`/settlements/${encodeURIComponent(id)}/reject`, {});
 }

@@ -1,8 +1,7 @@
 // ========================
 // コントローラー統合版
 // core/controller.js
-// 目的：アプリの共通初期化と清算機能の初期化を提供する
-// 役割：各機能モジュールの初期化関数をまとめてエクスポートする
+// 目的：アプリ共通のイベント配線・初期化を行う
 // ======================== 
 
 // ---- Imports (State / Router) ----
@@ -24,7 +23,7 @@ import {
 // ---- Imports (Services) ----
 import { addExpense, editExpense, deleteExpense } from "../services/expenses-service.js";
 import {
-  listAllSettlements,
+  listSettlements,         // ← API版
   requestSettlement,
   approveSettlement,
   rejectSettlement,
@@ -35,39 +34,50 @@ const $  = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
 const on = (el, ev, fn) => el && el.addEventListener(ev, fn);
 
-
-
-// ========================
-// 外部公開関数：他のモジュールから呼び出される関数
-// ========================
-
-export async function refreshHome() {
-  await renderExpensesTable();          // 支出一覧を再描画
-  await renderSettlementHistory();      // 清算履歴を再描画
-  await renderClearanceSummaryAll();    // 清算サマリーを更新
+// ---- 内部ヘルパ（APIページング→配列に正規化） ----
+async function fetchAllSettlements() {
+  const all = [];
+  let cursor;
+  do {
+    const res = await listSettlements({ limit: 200, cursor });
+    const items = (res && typeof res === "object")
+      ? (Array.isArray(res.items) ? res.items
+        : Array.isArray(res.data) ? res.data
+        : Array.isArray(res.results) ? res.results
+        : Array.isArray(res) ? res : [])
+      : [];
+    all.push(...items);
+    cursor = res?.nextCursor ?? res?.cursor ?? null;
+  } while (cursor);
+  return all;
 }
+
+// ---- 外部公開 ----
+export async function refreshUI() {
+  await renderExpensesTable();
+  await renderSettlementHistory();
+  await renderClearanceSummaryAll();
+  await renderClearanceActions();
+}
+
+// 二重バインド防止（再ブート時に安全）
+let __inited = false;
 
 export async function initCommon() {
-  // 各機能の初期化
-  bindUserSwitcher();               // ユーザー切替機能の設定
-  bindRoutes();                     // 画面遷移ボタンの設定
-  bindEntryForm();                  // 支出入力フォームの設定
-  bindEntryShortcuts();             // 入力フォームのショートカット機能設定
+  if (__inited) return;
+  __inited = true;
 
-  // 詳細画面表示用のグローバル関数を設定
-  exposeDetailHook();                // 詳細画面表示機能の設定
-
-  // 精算機能の初期化
-  bindClearanceButtons();            // 清算関連のボタンの動作を設定
-  bindClearanceRouteInit();          // 清算画面への遷移時の処理を設定
-
-  // アプリの初期表示
-  show("home");                          // ホーム画面を表示
-  await refreshHome();                   // ホーム画面の内容を更新
+  bindUserSwitcher();          // ユーザ切替（デバッグ時は再ブート要求も）
+  bindRoutes();                // 画面遷移ボタン
+  bindEntryForm();             // 支出入力フォーム
+  bindEntryShortcuts();        // 入力ショートカット
+  exposeDetailHook();          // 詳細表示フック
+  bindClearanceButtons();      // 清算アクション
+  bindClearanceRouteInit();    // 清算画面遷移時の初期化
 }
 
 // ========================
-// 内部関数：このファイル内でのみ使用されるプライベート関数群
+// 内部関数
 // ========================
 
 function bindUserSwitcher() {
@@ -75,20 +85,30 @@ function bindUserSwitcher() {
   if (!userSelect) return;
 
   ["Aさん", "Bさん"].forEach((u) => {
-    const opt = document.createElement("option");
-    opt.value = u;
-    opt.textContent = u;
-    userSelect.appendChild(opt);
+    if (![...userSelect.options].some(o => o.value === u)) {
+      const opt = document.createElement("option");
+      opt.value = u; opt.textContent = u;
+      userSelect.appendChild(opt);
+    }
   });
 
   userSelect.value = currentUser;
 
   on(userSelect, "change", async () => {
     setCurrentUser(userSelect.value);
+
+    // デバッグモードが ON のときは「再ブート」を要求
+    const debugOn = document.querySelector(".js-debug-toggle")?.checked;
+    if (debugOn) {
+      try { show("loading"); } catch {}
+      document.dispatchEvent(new CustomEvent("app:debug-reboot"));
+      return; // 以降の軽量更新はスキップ（boot に任せる）
+    }
+
+    // 通常時：軽く反映（必要に応じてUIだけ更新）
     const payerInput = $("#payer");
     if (payerInput) payerInput.value = userSelect.value;
-    await renderClearanceSummaryAll();
-    await refreshHome();
+    // await refreshUI(); // 必要になったら解放
   });
 }
 
@@ -99,7 +119,7 @@ function bindRoutes() {
       show(view);
 
       if (view === "home") {
-        await refreshHome();
+        await refreshUI();
 
       } else if (view === "entry") {
         setEditingId(null);
@@ -148,10 +168,16 @@ function bindEntryForm() {
 
     try {
       if (editingId) {
-        await editExpense(payload);
+        // ★ API版のシグネチャに合わせる（id, partial）
+        await editExpense(payload.id, {
+          amount: payload.amount,
+          date: payload.date,
+          category: payload.category,
+          memo: payload.memo,
+        }); // 
         setEditingId(null);
       } else {
-        await addExpense(payload);
+        await addExpense(payload); // 同名・同シグネチャでOK 
       }
 
       toast.success("保存しました");
@@ -160,8 +186,7 @@ function bindEntryForm() {
       $("#payer").value = currentUser;
 
       show("home");
-      await renderClearanceSummaryAll();
-      await refreshHome();
+      await refreshUI();
 
     } catch (err) {
       console.warn(err);
@@ -190,8 +215,7 @@ function bindEntryForm() {
   // 詳細→削除
   window.__deleteExpense = async (expId) => {
     await deleteExpense(expId);
-    await renderClearanceSummaryAll();
-    await refreshHome();
+    await refreshUI();
     toast.success("削除しました");
   };
 }
@@ -250,7 +274,7 @@ function exposeDetailHook() {
     if (delBtn)  delBtn.onclick  = async () => {
       await window.__deleteExpense?.(exp.id);
       show("home");
-      await refreshHome();
+      await refreshUI();
     };
   };
 }
@@ -313,9 +337,7 @@ function bindClearanceRouteInit() {
   document.querySelectorAll(".js-route").forEach((btn) => {
     on(btn, "click", async () => {
       if (btn.getAttribute("data-view") !== "clearance") return;
-      await renderClearanceSummaryAll();
-      await renderClearanceActions();
-      await renderSettlementHistory();
+      // 必要に応じて遷移時の初期化を追加
     });
   });
 }
@@ -327,13 +349,14 @@ function bindClearanceButtons() {
   const rejectBtn  = $(".js-clearance-reject2");
 
   const refreshAll = async () => {
+    await renderExpensesTable();
+    await renderSettlementHistory();
     await renderClearanceSummaryAll();
     await renderClearanceActions();
-    await renderSettlementHistory();
   };
 
   const getPending = async () => {
-    const list = await listAllSettlements();
+    const list = await fetchAllSettlements(); // ← listAllSettlements の代替
     return list.find(s => s.status === "申請中");
   };
 
@@ -393,6 +416,7 @@ function bindClearanceButtons() {
     }
   });
 
+  // エクスポート不要のユーティリティ
   window.__approveSettlement = async (id) => { await approveSettlement(id); await refreshAll(); };
   window.__rejectSettlement  = async (id) => { await rejectSettlement(id);  await refreshAll(); };
 }
